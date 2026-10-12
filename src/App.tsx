@@ -4,7 +4,7 @@
  * validation, reconciliation, JSON offline utility generation, and export packages.
  */
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   FileSpreadsheet,
   Layers,
@@ -16,9 +16,8 @@ import {
   CheckCircle2,
   FileDown,
   Archive,
-  RefreshCw,
-  FolderDown,
-  Sparkles,
+  ArrowRight,
+  TrendingUp,
 } from 'lucide-react';
 
 import { Header } from './components/Header';
@@ -34,6 +33,7 @@ import {
   UploadedReportFile,
   processReportsLocally,
   ProcessGSTR1Result,
+  STATE_CODE_MAP,
 } from './engine/gstEngine';
 import { SAMPLE_TEMPLATES } from './data/sampleTemplates';
 import {
@@ -44,15 +44,32 @@ import {
   downloadReconciliationCsv,
 } from './utils/exportUtils';
 
+// User's registered 17 GSTINs across 17 states (PAN: ABAFV0462G)
+const DEFAULT_USER_GSTINS: string[] = [
+  '27ABAFV0462G1ZB', // Maharashtra (27)
+  '33ABAFV0462G1ZI', // Tamil Nadu (33)
+  '36ABAFV0462G1ZC', // Telangana (36)
+  '06ABAFV0462G1ZF', // Haryana (06)
+  '19ABAFV0462G1Z8', // West Bengal (19)
+  '29ABAFV0462G1Z7', // Karnataka (29)
+  '09ABAFV0462G1Z9', // Uttar Pradesh (09)
+  '03ABAFV0462G1ZL', // Punjab (03)
+  '21ABAFV0462G1ZN', // Odisha (21)
+  '37ABAFV0462G1ZA', // Andhra Pradesh (37)
+  '24ABAFV0462G1ZH', // Gujarat (24)
+  '23ABAFV0462G1ZJ', // Madhya Pradesh (23)
+  '08ABAFV0462G1ZB', // Rajasthan (08)
+  '32ABAFV0462G1ZK', // Kerala (32)
+  '18ABAFV0462G1ZA', // Assam (18)
+  '20ABAFV0462G1ZP', // Jharkhand (20)
+  '10ABAFV0462G1ZQ', // Bihar (10)
+];
+
 export default function App() {
   // State
   const [files, setFiles] = useState<UploadedReportFile[]>([]);
-  const [gstinList, setGstinList] = useState<string[]>([
-    '37ABAFV0462G1ZA', // Reference AP registration
-    '29ABAFV0462G1Z7', // Karnataka registration
-    '27ABAFV0462G1ZB', // Maharashtra registration
-  ]);
-  const [selectedGstin, setSelectedGstin] = useState<string>('37ABAFV0462G1ZA');
+  const [gstinList, setGstinList] = useState<string[]>(DEFAULT_USER_GSTINS);
+  const [selectedGstin, setSelectedGstin] = useState<string>('27ABAFV0462G1ZB');
   const [filingPeriod, setFilingPeriod] = useState<string>('092026');
   const [activeTab, setActiveTab] = useState<
     'files' | 'validation' | 'reconciliation' | 'json' | 'audit' | 'download'
@@ -70,11 +87,21 @@ export default function App() {
     return gstinList.map((g) => processReportsLocally(files, g, filingPeriod));
   }, [files, gstinList, filingPeriod]);
 
-  // Load sample templates on mount so the user immediately sees working state
-  useEffect(() => {
-    handleLoadSampleData();
-  }, []);
+  // Check if other GSTINs have data when current GSTIN has 0 records
+  const gstinWithMostData = useMemo(() => {
+    if (currentResult.total_records_processed > 0) return null;
+    let bestGstin: string | null = null;
+    let maxRecords = 0;
+    for (const res of allGstinResults) {
+      if (res.total_records_processed > maxRecords) {
+        maxRecords = res.total_records_processed;
+        bestGstin = res.seller_gstin;
+      }
+    }
+    return bestGstin ? { gstin: bestGstin, count: maxRecords } : null;
+  }, [currentResult, allGstinResults]);
 
+  // Handle manual loading of sample templates when user clicks the button
   const handleLoadSampleData = () => {
     setIsProcessing(true);
     const sampleFilesWithId: UploadedReportFile[] = SAMPLE_TEMPLATES.map(
@@ -95,6 +122,15 @@ export default function App() {
     setFiles([]);
   };
 
+  const handleUpdateFileType = (
+    fileId: string,
+    newType: UploadedReportFile['detectedType']
+  ) => {
+    setFiles((prev) =>
+      prev.map((f) => (f.id === fileId ? { ...f, detectedType: newType } : f))
+    );
+  };
+
   const handleFilesAdded = (newFiles: UploadedReportFile[]) => {
     setFiles((prev) => {
       // Replace existing file of same detected type or append
@@ -111,7 +147,9 @@ export default function App() {
   };
 
   const handleAddGstin = (newGstin: string) => {
-    setGstinList((prev) => [...prev, newGstin]);
+    if (!gstinList.includes(newGstin)) {
+      setGstinList((prev) => [...prev, newGstin]);
+    }
     setSelectedGstin(newGstin);
   };
 
@@ -132,7 +170,6 @@ export default function App() {
   };
 
   const errorsCount = currentResult.validation_summary.errors;
-  const warningsCount = currentResult.validation_summary.warnings;
 
   return (
     <div className="min-h-screen bg-[#090d14] text-slate-100 flex flex-col antialiased selection:bg-emerald-500 selection:text-black">
@@ -157,6 +194,31 @@ export default function App() {
           filingPeriod={filingPeriod}
           onChangeFilingPeriod={setFilingPeriod}
         />
+
+        {/* GSTIN Switcher Prompt if another GSTIN has records */}
+        {gstinWithMostData && (
+          <div className="bg-teal-950/40 border border-teal-500/40 p-3.5 rounded-xl flex items-center justify-between text-xs text-teal-200">
+            <div className="flex items-center space-x-2">
+              <TrendingUp className="w-4 h-4 text-teal-400 shrink-0" />
+              <span>
+                Uploaded report contains {gstinWithMostData.count} records for{' '}
+                <strong className="font-mono text-white">
+                  {gstinWithMostData.gstin} (
+                  {STATE_CODE_MAP[gstinWithMostData.gstin.slice(0, 2)] || 'State'}
+                  )
+                </strong>
+                .
+              </span>
+            </div>
+            <button
+              onClick={() => setSelectedGstin(gstinWithMostData.gstin)}
+              className="px-3 py-1 rounded-lg bg-teal-600 hover:bg-teal-500 text-white font-semibold flex items-center space-x-1 transition cursor-pointer"
+            >
+              <span>Switch to this GSTIN</span>
+              <ArrowRight className="w-3 h-3" />
+            </button>
+          </div>
+        )}
 
         {/* Status Notification Banner */}
         <div
@@ -196,11 +258,13 @@ export default function App() {
                 {errorsCount > 0
                   ? 'Review the Validation tab for actionable guidance on row-level corrections.'
                   : files.length === 0
-                  ? 'Upload your Amazon GST report CSV files or click "Load Sample Templates" above.'
-                  : `Total Taxable Supply: ${formatCurrency(
+                  ? 'Upload your Amazon Seller Central GST reports to generate GSTR-1 returns.'
+                  : `Active GSTIN: ${selectedGstin} (${
+                      STATE_CODE_MAP[selectedGstin.slice(0, 2)] || ''
+                    }) • Taxable Supplies: ${formatCurrency(
                       currentResult.reconciliation.grand_totals
                         .total_taxable_value
-                    )} • Total GST: ${formatCurrency(
+                    )} • Total Tax: ${formatCurrency(
                       currentResult.reconciliation.grand_totals.total_tax
                     )}`}
               </p>
@@ -305,6 +369,7 @@ export default function App() {
               onFilesAdded={handleFilesAdded}
               onRemoveFile={handleRemoveFile}
               onPreviewFile={(f) => setPreviewFile(f)}
+              onUpdateFileType={handleUpdateFileType}
             />
           )}
 

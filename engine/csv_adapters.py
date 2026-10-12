@@ -93,50 +93,59 @@ def detect_file_type(headers: List[str], filename: str = "") -> str:
     """
     Detects which of the 7 Amazon report types the file represents
     based on column signatures and filename hints.
-    Returns one of:
-      'b2b'
-      'b2cs'
-      'cdnr'
-      'docs'
-      'hsn_b2b'
-      'hsn_b2c'
-      'supeco'
-      'unknown'
     """
     norm_headers = [normalize_header(h) for h in headers]
     h_set = set(norm_headers)
     fname_lower = filename.lower()
 
-    # 1. CDNR (Credit/Debit note)
-    if any("note number" in h for h in h_set) or any("note type" in h for h in h_set):
+    # 1. Filename-based detection
+    if "cdnr" in fname_lower or "credit" in fname_lower or "debit" in fname_lower:
+        return "cdnr"
+    if "docs" in fname_lower or "document" in fname_lower:
+        return "docs"
+    if "eco" in fname_lower or "supeco" in fname_lower or "ecommerce" in fname_lower:
+        return "supeco"
+    if "hsn(b2b)" in fname_lower or "hsn_b2b" in fname_lower or ("hsn" in fname_lower and "b2b" in fname_lower):
+        return "hsn_b2b"
+    if "hsn(b2c)" in fname_lower or "hsn_b2c" in fname_lower or ("hsn" in fname_lower and "b2c" in fname_lower):
+        return "hsn_b2c"
+    if "b2b,sez" in fname_lower or ("b2b" in fname_lower and "hsn" not in fname_lower):
+        return "b2b"
+    if "b2cs" in fname_lower or ("b2c" in fname_lower and "hsn" not in fname_lower):
+        return "b2cs"
+
+    # 2. CDNR (Credit/Debit note)
+    if any("note number" in h or "note no" in h or "note type" in h for h in h_set):
         return "cdnr"
 
-    # 2. Documents Issued
+    # 3. Documents Issued
     if any("nature of document" in h for h in h_set) or (
         any("sr. no. from" in h for h in h_set) and any("sr. no. to" in h for h in h_set)
     ):
         return "docs"
 
-    # 3. Supplies through E-commerce
-    if any("e-commerce operator" in h for h in h_set) and not any("invoice number" in h for h in h_set):
+    # 4. Supplies through E-commerce
+    if any("e-commerce operator" in h or "eco gstin" in h or "etin" in h for h in h_set):
         return "supeco"
 
-    # 4. HSN summaries
-    if any("hsn" in h for h in h_set) and any("uqc" in h for h in h_set):
-        if "b2c" in fname_lower:
+    # 5. HSN summaries
+    if any("hsn" in h or "sac" in h for h in h_set):
+        if "b2c" in fname_lower or any("b2c" in h for h in h_set):
             return "hsn_b2c"
-        if "b2b" in fname_lower:
+        if "b2b" in fname_lower or any("b2b" in h for h in h_set):
             return "hsn_b2b"
         return "hsn_b2c" if "b2c" in fname_lower else "hsn_b2b"
 
-    # 5. B2B, SEZ, DE
-    if any("invoice number" in h for h in h_set) and any("recipient" in h or "receiver" in h for h in h_set):
+    # 6. B2B, SEZ, DE
+    if any("invoice" in h or "inum" in h for h in h_set) and any(
+        "recipient" in h or "receiver" in h or "buyer" in h or "party" in h or "gstin" in h for h in h_set
+    ):
         return "b2b"
 
-    # 6. B2CS
+    # 7. B2CS
     if (
-        any("type" == h for h in h_set) or any("place of supply" in h for h in h_set)
-    ) and any("taxable value" in h for h in h_set) and not any("invoice number" in h for h in h_set):
+        any("type" in h or "place of supply" in h or "pos" in h or "state" in h for h in h_set)
+    ) and any("taxable" in h or "rate" in h or "amount" in h for h in h_set):
         return "b2cs"
 
     return "unknown"

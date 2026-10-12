@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
-import { UploadCloud, FileText, CheckCircle2, AlertCircle, Trash2, Eye, Table } from 'lucide-react';
-import { UploadedReportFile, detectFileType, normalizeHeader } from '../engine/gstEngine';
+import { UploadCloud, FileText, CheckCircle2, AlertCircle, Trash2, Eye, Tag, ChevronDown } from 'lucide-react';
+import { UploadedReportFile, detectFileType } from '../engine/gstEngine';
 import Papa from 'papaparse';
 
 interface FileUploadZoneProps {
@@ -8,16 +8,18 @@ interface FileUploadZoneProps {
   onFilesAdded: (newFiles: UploadedReportFile[]) => void;
   onRemoveFile: (fileId: string) => void;
   onPreviewFile: (file: UploadedReportFile) => void;
+  onUpdateFileType?: (fileId: string, newType: UploadedReportFile['detectedType']) => void;
 }
 
-const REQUIRED_CATEGORIES = [
-  { key: 'b2b', label: 'B2B / SEZ / DE', filename: 'b2b,sez,de.csv', desc: 'B2B Tax Invoices' },
-  { key: 'b2cs', label: 'B2CS Summary', filename: 'b2cs.csv', desc: 'B2C Sales by POS & Rate' },
-  { key: 'cdnr', label: 'CDNR Credit/Debit', filename: 'cdnr.csv', desc: 'Registered Notes' },
-  { key: 'docs', label: 'Documents Issued', filename: 'docs.csv', desc: 'Outward Series & Cancelled' },
-  { key: 'hsn_b2c', label: 'HSN (B2C)', filename: 'hsn(b2c).csv', desc: 'B2C Tariff Aggregation' },
-  { key: 'hsn_b2b', label: 'HSN (B2B)', filename: 'hsn(b2b).csv', desc: 'B2B Tariff Aggregation' },
-  { key: 'supeco', label: 'Supplies via ECO', filename: 'supplies_through_eco.csv', desc: 'Operator (Amazon/Flipkart)' },
+const SECTION_OPTIONS: { value: UploadedReportFile['detectedType']; label: string }[] = [
+  { value: 'b2b', label: 'B2B / SEZ / DE Invoices' },
+  { value: 'b2cs', label: 'B2CS Summary (B2C Small)' },
+  { value: 'cdnr', label: 'CDNR (Credit / Debit Notes)' },
+  { value: 'docs', label: 'Documents Issued Register' },
+  { value: 'hsn_b2c', label: 'HSN Summary (B2C)' },
+  { value: 'hsn_b2b', label: 'HSN Summary (B2B)' },
+  { value: 'supeco', label: 'Supplies via ECO (Amazon)' },
+  { value: 'unknown', label: 'Unclassified / Other' },
 ];
 
 export const FileUploadZone: React.FC<FileUploadZoneProps> = ({
@@ -25,6 +27,7 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({
   onFilesAdded,
   onRemoveFile,
   onPreviewFile,
+  onUpdateFileType,
 }) => {
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -69,15 +72,24 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({
     }
   };
 
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+  };
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {/* Upload Drop Zone */}
       <div
-        onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setIsDragging(true);
+        }}
         onDragLeave={() => setIsDragging(false)}
         onDrop={handleDrop}
         onClick={() => fileInputRef.current?.click()}
-        className={`border-2 border-dashed rounded-2xl p-6 sm:p-8 text-center transition-all cursor-pointer ${
+        className={`border-2 border-dashed rounded-2xl p-7 sm:p-10 text-center transition-all cursor-pointer ${
           isDragging
             ? 'border-emerald-500 bg-emerald-500/10'
             : 'border-slate-700/80 hover:border-slate-600 bg-slate-900/40 hover:bg-slate-900/70'
@@ -99,83 +111,121 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({
           </div>
           <div>
             <h3 className="text-sm font-semibold text-white">
-              Drop Amazon Seller Central CSV reports here, or <span className="text-emerald-400 underline underline-offset-2">browse</span>
+              Drop your Amazon Seller Central GST reports here, or{' '}
+              <span className="text-emerald-400 underline underline-offset-2">
+                browse files
+              </span>
             </h3>
-            <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">
-              Supports UTF-8 BOM, auto-detects all 7 Amazon report types by column headers. Up to 100,000+ rows processed efficiently in chunks.
+            <p className="text-xs text-slate-400 mt-1.5 max-w-lg mx-auto">
+              Auto-detects section by column headers and contents. Upload all your monthly reports at once or individually.
             </p>
+          </div>
+          <div className="flex flex-wrap items-center justify-center gap-1.5 pt-1 text-[11px] text-slate-500">
+            <span>Supports: B2B</span>
+            <span>•</span>
+            <span>B2CS</span>
+            <span>•</span>
+            <span>Credit/Debit Notes</span>
+            <span>•</span>
+            <span>Documents Register</span>
+            <span>•</span>
+            <span>HSN Summaries</span>
+            <span>•</span>
+            <span>ECO Supplies</span>
           </div>
         </div>
       </div>
 
-      {/* 7 Report Status Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2.5">
-        {REQUIRED_CATEGORIES.map((cat) => {
-          const matchedFile = files.find(f => f.detectedType === cat.key);
-          const isLoaded = !!matchedFile;
-
-          return (
-            <div
-              key={cat.key}
-              className={`p-3 rounded-xl border flex flex-col justify-between transition ${
-                isLoaded
-                  ? 'bg-emerald-950/20 border-emerald-500/30'
-                  : 'bg-slate-900/40 border-slate-800 opacity-75'
-              }`}
-            >
-              <div>
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold text-white tracking-wide">
-                    {cat.label}
-                  </span>
-                  {isLoaded ? (
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                  ) : (
-                    <div className="w-2 h-2 rounded-full bg-slate-600" />
-                  )}
-                </div>
-                <p className="text-[10px] text-slate-400 mt-0.5 line-clamp-1" title={cat.filename}>
-                  {cat.filename}
-                </p>
-              </div>
-
-              <div className="mt-2 pt-2 border-t border-slate-800/80 flex items-center justify-between text-[10px]">
-                {isLoaded ? (
-                  <>
-                    <span className="text-emerald-400 font-mono font-medium">
-                      {matchedFile.rowCount} rows
-                    </span>
-                    <div className="flex items-center space-x-1">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onPreviewFile(matchedFile);
-                        }}
-                        className="text-slate-400 hover:text-white p-0.5"
-                        title="Preview data"
-                      >
-                        <Eye className="w-3 h-3" />
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onRemoveFile(matchedFile.id);
-                        }}
-                        className="text-slate-400 hover:text-rose-400 p-0.5"
-                        title="Remove file"
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </button>
-                    </div>
-                  </>
-                ) : (
-                  <span className="text-slate-500 italic">Not loaded</span>
-                )}
-              </div>
+      {/* Only Show Uploaded Files List if files exist */}
+      {files.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <FileText className="w-4 h-4 text-emerald-400" />
+              <h3 className="text-xs font-bold text-slate-200 uppercase tracking-wider">
+                Uploaded Files ({files.length})
+              </h3>
             </div>
-          );
-        })}
-      </div>
+            <span className="text-[11px] text-slate-400">
+              Auto-classified based on report column headers
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {files.map((file) => (
+              <div
+                key={file.id}
+                className="bg-slate-900/60 border border-slate-800 hover:border-slate-700/80 rounded-xl p-3.5 flex flex-col justify-between space-y-3 transition"
+              >
+                <div className="space-y-1.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center space-x-2 min-w-0">
+                      <div className="w-7 h-7 rounded-lg bg-slate-800 flex items-center justify-center text-emerald-400 shrink-0">
+                        <FileText className="w-3.5 h-3.5" />
+                      </div>
+                      <span
+                        className="text-xs font-semibold text-white truncate font-mono"
+                        title={file.filename}
+                      >
+                        {file.filename}
+                      </span>
+                    </div>
+
+                    <button
+                      onClick={() => onRemoveFile(file.id)}
+                      className="text-slate-500 hover:text-rose-400 p-1 rounded-lg hover:bg-slate-800 transition cursor-pointer"
+                      title="Remove file"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  <div className="flex items-center space-x-2 text-[11px] text-slate-400">
+                    <span className="font-mono text-emerald-400 font-medium">
+                      {file.rowCount.toLocaleString()} rows
+                    </span>
+                    <span>•</span>
+                    <span>{formatFileSize(file.size)}</span>
+                  </div>
+                </div>
+
+                {/* Section Mapping Dropdown */}
+                <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between gap-2">
+                  <div className="flex items-center space-x-1.5 flex-1 min-w-0">
+                    <Tag className="w-3 h-3 text-slate-500 shrink-0" />
+                    <select
+                      value={file.detectedType}
+                      onChange={(e) =>
+                        onUpdateFileType &&
+                        onUpdateFileType(
+                          file.id,
+                          e.target.value as UploadedReportFile['detectedType']
+                        )
+                      }
+                      className="bg-slate-950/80 border border-slate-800 text-[11px] text-slate-200 rounded-lg px-2 py-1 outline-none w-full truncate font-medium cursor-pointer"
+                    >
+                      {SECTION_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <button
+                    onClick={() => onPreviewFile(file)}
+                    className="flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-medium border border-slate-700 transition cursor-pointer shrink-0"
+                    title="Preview file headers and data"
+                  >
+                    <Eye className="w-3 h-3" />
+                    <span>Preview</span>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

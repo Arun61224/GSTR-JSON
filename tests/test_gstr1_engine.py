@@ -204,16 +204,23 @@ OE,24-GUJARAT,5,,-692.38,0,
         self.assertEqual(len(summaries), 5000)
 
     def test_12_invalid_transaction_flagging(self):
-        """12. Invalid transactions are flagged rather than silently included."""
+        """12. Blank invoice numbers are ignored and invalid recipient GSTINs are flagged."""
         adapter = AmazonCSVAdapter()
-        # B2B row missing invoice number
-        bad_b2b = """GSTIN/UIN of Recipient,Receiver Name,Invoice Number,Invoice date,Invoice Value,Place Of Supply,Reverse Charge,Rate,Taxable Value
+        # B2B row with blank invoice number is ignored
+        bad_b2b_blank = """GSTIN/UIN of Recipient,Receiver Name,Invoice Number,Invoice date,Invoice Value,Place Of Supply,Reverse Charge,Rate,Taxable Value
 37AUJPG5075A1ZT,KALYAN SILKS,,08-09-2026,1050,37-ANDHRA PRADESH,N,5,1000.00
 """
-        _, rows = adapter.parse_csv_content(bad_b2b)
+        _, rows = adapter.parse_csv_content(bad_b2b_blank)
         invoices = adapter.parse_b2b(rows, seller_gstin="37ABAFV0462G1ZA")
         self.assertEqual(len(invoices), 0)
-        self.assertTrue(any(i.code == "ERR_B2B_MISSING_INUM" for i in adapter.issues))
+
+        # B2B row with missing recipient GSTIN is flagged
+        bad_b2b_no_ctin = """GSTIN/UIN of Recipient,Receiver Name,Invoice Number,Invoice date,Invoice Value,Place Of Supply,Reverse Charge,Rate,Taxable Value
+,KALYAN SILKS,INV-999,08-09-2026,1050,37-ANDHRA PRADESH,N,5,1000.00
+"""
+        _, rows_no_ctin = adapter.parse_csv_content(bad_b2b_no_ctin)
+        adapter.parse_b2b(rows_no_ctin, seller_gstin="37ABAFV0462G1ZA")
+        self.assertTrue(any(i.code == "ERR_B2B_MISSING_CTIN" for i in adapter.issues))
 
 
 if __name__ == "__main__":

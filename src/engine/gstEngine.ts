@@ -508,34 +508,21 @@ export function processReportsLocally(
         else if (invTypeRaw.includes('sez')) invTyp = invTypeRaw.includes('with') ? 'SEWP' : 'SEWOP';
 
         if (!inum) {
-          // If invoice number is missing, check if it's a B2C line misclassified
-          if (!ctin && txval !== 0) {
-            // Treat as B2CS fallback
-            const isIntra = (pos === sellerState);
-            b2csList.push({
-              sply_ty: isIntra ? 'INTRA' : 'INTER',
-              rt: rate,
-              typ: 'OE',
-              pos: pos || sellerState,
-              txval: roundCur(txval),
-              iamt: isIntra ? 0 : roundCur((txval * rate) / 100),
-              camt: isIntra ? roundCur((txval * (rate / 2)) / 100) : 0,
-              samt: isIntra ? roundCur((txval * (rate / 2)) / 100) : 0,
-              csamt: roundCur(cess)
-            });
-            totalRecordsProcessed++;
-            continue;
-          }
-          issues.push({
-            severity: 'ERROR',
-            code: 'ERR_B2B_MISSING_INUM',
-            message: `Missing Invoice Number in ${f.filename} at row ${rowNum}`,
-            section: 'B2B',
+          // Simply ignore rows with blank invoice numbers as requested
+          auditLog.push({
             source_file: f.filename,
             source_row: rowNum,
-            gstin: ctin,
-            document_number: '',
-            guidance: 'All B2B rows must contain a non-empty invoice number.'
+            raw_reference: 'BLANK_INVOICE_ROW',
+            source_type: 'B2B_LINE',
+            seller_gstin: cleanSellerGstin,
+            classification_decision: 'Ignored Blank Invoice Row',
+            status: 'EXCLUDED',
+            reason: 'Row excluded because Invoice Number is blank/empty',
+            taxable_value: 0,
+            total_tax: 0,
+            rate: 0,
+            pos: '',
+            notes: 'Blank invoice row skipped'
           });
           continue;
         }
@@ -717,17 +704,7 @@ export function processReportsLocally(
         const cess = parseFloat(getFieldValue(normRow, ['cess amount', 'cess']) || '0') || 0;
 
         if (!noteNum) {
-          issues.push({
-            severity: 'ERROR',
-            code: 'ERR_CDNR_MISSING_NUM',
-            message: `Missing Note Number in row ${rowNum}`,
-            section: 'CDNR',
-            source_file: f.filename,
-            source_row: rowNum,
-            gstin: ctin,
-            document_number: '',
-            guidance: 'Note number is mandatory for Credit/Debit notes.'
-          });
+          // Simply ignore rows with blank note number
           continue;
         }
 
@@ -842,17 +819,7 @@ export function processReportsLocally(
         const rate = parseFloat(getFieldValue(normRow, ['rate', 'gst rate', 'tax rate', 'rt']) || '0') || 0;
 
         if (!hsn) {
-          issues.push({
-            severity: 'ERROR',
-            code: 'ERR_HSN_MISSING',
-            message: `Missing HSN code in row ${rowNum}`,
-            section: isB2B ? 'HSN_B2B' : 'HSN_B2C',
-            source_file: f.filename,
-            source_row: rowNum,
-            gstin: '',
-            document_number: '',
-            guidance: 'HSN code must be present for all summarized items.'
-          });
+          // Simply ignore rows with blank HSN code
           continue;
         }
 

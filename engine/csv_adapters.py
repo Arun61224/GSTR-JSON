@@ -235,15 +235,7 @@ class AmazonCSVAdapter:
             cess = parse_decimal_safe(row.get("cess amount") or row.get("cess", 0))
 
             if not inum:
-                self.issues.append(ValidationIssue(
-                    severity=Severity.ERROR,
-                    code="ERR_B2B_MISSING_INUM",
-                    message="Missing Invoice Number in B2B row",
-                    section="B2B",
-                    source_file=source_file,
-                    source_row=idx,
-                    guidance="Ensure all B2B records have a valid Invoice Number."
-                ))
+                # Silently ignore rows with blank invoice numbers
                 continue
 
             if not ctin:

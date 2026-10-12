@@ -1,0 +1,297 @@
+{
+  "gstin": "37ABAFV0462G1ZA",
+  "fp": "092026",
+  "b2b": [
+    {
+      "ctin": "37AUJPG5075A1ZT",
+      "inv": [
+        {
+          "inum": "RJX1-714",
+          "idt": "08-09-2026",
+          "val": 725,
+          "pos": "37",
+          "rchrg": "N",
+          "inv_typ": "R",
+          "itms": [
+            {
+              "num": 1,
+              "itm_det": {
+                "txval": 690.07,
+                "rt": 5,
+                "iamt": 0,
+                "camt": 17.25,
+                "samt": 17.25,
+                "csamt": 0
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "ctin": "27ABAFV0462G1ZB",
+      "inv": [
+        {
+          "inum": "RJX1-T-158",
+          "idt": "06-09-2026",
+          "val": 480,
+          "pos": "27",
+          "rchrg": "N",
+          "inv_typ": "R",
+          "itms": [
+            {
+              "num": 1,
+              "itm_det": {
+                "txval": 457.14,
+                "rt": 5,
+                "iamt": 22.86,
+                "camt": 0,
+                "samt": 0,
+                "csamt": 0
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "ctin": "29ABAFV0462G1Z7",
+      "inv": [
+        {
+          "inum": "RJX1-T-159",
+          "idt": "15-09-2026",
+          "val": 314,
+          "pos": "29",
+          "rchrg": "N",
+          "inv_typ": "R",
+          "itms": [
+            {
+              "num": 1,
+              "itm_det": {
+                "txval": 298.71,
+                "rt": 5,
+                "iamt": 14.94,
+                "camt": 0,
+                "samt": 0,
+                "csamt": 0
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "b2cs": [
+    {
+      "sply_ty": "INTRA",
+      "rt": 5,
+      "typ": "OE",
+      "pos": "37",
+      "txval": 11215.65,
+      "iamt": 0,
+      "samt": 280.43,
+      "camt": 280.43,
+      "csamt": 0
+    },
+    {
+      "sply_ty": "INTER",
+      "rt": 5,
+      "typ": "OE",
+      "pos": "36",
+      "txval": 2056.37,
+      "iamt": 102.82,
+      "samt": 0,
+      "camt": 0,
+      "csamt": 0
+    },
+    {
+      "sply_ty": "INTER",
+      "rt": 5,
+      "typ": "OE",
+      "pos": "30",
+      "txval": 671.61,
+      "iamt": 33.58,
+      "samt": 0,
+      "camt": 0,
+      "csamt": 0
+    },
+    {
+      "sply_ty": "INTER",
+      "rt": 5,
+      "typ": "OE",
+      "pos": "17",
+      "txval": 671.61,
+      "iamt": 33.58,
+      "samt": 0,
+      "camt": 0,
+      "csamt": 0
+    },
+    {
+      "sply_ty": "INTER",
+      "rt": 5,
+      "typ": "OE",
+      "pos": "21",
+      "txval": 568.57,
+      "iamt": 28.43,
+      "samt": 0,
+      "camt": 0,
+      "csamt": 0
+    },
+    {
+      "sply_ty": "INTER",
+      "rt": 5,
+      "typ": "OE",
+      "pos": "29",
+      "txval": 520.95,
+      "iamt": 26.05,
+      "samt": 0,
+      "camt": 0,
+      "csamt": 0
+    },
+    {
+      "sply_ty": "INTER",
+      "rt": 5,
+      "typ": "OE",
+      "pos": "27",
+      "txval": 520.95,
+      "iamt": 26.05,
+      "samt": 0,
+      "camt": 0,
+      "csamt": 0
+    },
+    {
+      "sply_ty": "INTER",
+      "rt": 5,
+      "typ": "OE",
+      "pos": "24",
+      "txval": -692.38,
+      "iamt": -34.62,
+      "samt": 0,
+      "camt": 0,
+      "csamt": 0
+    }
+  ],
+  "doc_issue": {
+    "doc_det": [
+      {
+        "doc_num": 1,
+        "doc_typ": "Invoices for outward supply",
+        "docs": [
+          {
+            "num": 1,
+            "from": "RJX1-707",
+            "to": "RJX1-733",
+            "totnum": 27,
+            "cancel": 0,
+            "net_issue": 27
+          }
+        ]
+      },
+      {
+        "doc_num": 5,
+        "doc_typ": "Credit Note",
+        "docs": [
+          {
+            "num": 1,
+            "from": "RJX1-C-88",
+            "to": "RJX1-C-90",
+            "totnum": 3,
+            "cancel": 1,
+            "net_issue": 2
+          }
+        ]
+      }
+    ]
+  },
+  "supeco": {
+    "clttx": [
+      {
+        "etin": "37AAICA3918J1CS",
+        "suppval": 16223.4,
+        "igst": 215.89,
+        "cgst": 297.68,
+        "sgst": 297.68,
+        "cess": 0,
+        "flag": "N"
+      }
+    ]
+  },
+  "hsn": {
+    "hsn_b2c": [
+      {
+        "num": 1,
+        "hsn_sc": "61099090",
+        "uqc": "PCS",
+        "qty": 11,
+        "rt": 5,
+        "txval": 7566.12,
+        "iamt": 26.05,
+        "samt": 176.16,
+        "camt": 176.16,
+        "csamt": 0
+      },
+      {
+        "num": 2,
+        "hsn_sc": "61072990",
+        "uqc": "PCS",
+        "qty": 2,
+        "rt": 5,
+        "txval": 2035.6,
+        "iamt": 101.78,
+        "samt": 0,
+        "camt": 0,
+        "csamt": 0
+      },
+      {
+        "num": 3,
+        "hsn_sc": "61112000",
+        "uqc": "PCS",
+        "qty": 5,
+        "rt": 5,
+        "txval": 3174.47,
+        "iamt": 33.58,
+        "samt": 62.58,
+        "camt": 62.58,
+        "csamt": 0
+      },
+      {
+        "num": 4,
+        "hsn_sc": "61034990",
+        "uqc": "PCS",
+        "qty": 5,
+        "rt": 5,
+        "txval": 2757.14,
+        "iamt": 54.48,
+        "samt": 41.69,
+        "camt": 41.69,
+        "csamt": 0
+      }
+    ],
+    "hsn_b2b": [
+      {
+        "num": 5,
+        "hsn_sc": "61099090",
+        "uqc": "PCS",
+        "qty": 2,
+        "rt": 5,
+        "txval": 988.78,
+        "iamt": 14.94,
+        "samt": 17.25,
+        "camt": 17.25,
+        "csamt": 0
+      },
+      {
+        "num": 6,
+        "hsn_sc": "61072990",
+        "uqc": "PCS",
+        "qty": 1,
+        "rt": 5,
+        "txval": 457.14,
+        "iamt": 22.86,
+        "samt": 0,
+        "camt": 0,
+        "csamt": 0
+      }
+    ]
+  }
+}

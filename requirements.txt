@@ -1,0 +1,7 @@
+# Python GSTR-1 Generator Engine Dependencies
+# Requires Python >= 3.9
+# No external dependencies are strictly needed for the core calculation engine (uses standard library: decimal, csv, json, re, unittest)
+# Optional packages for development and advanced testing:
+pytest>=7.4.0
+pytest-cov>=4.1.0
+python-dateutil>=2.8.2

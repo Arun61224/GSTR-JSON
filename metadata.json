@@ -1,0 +1,6 @@
+{
+  "name": "GSTR-1 JSON Generator for Amazon Sellers",
+  "description": "Production-grade GSTR-1 JSON generator converting Amazon Seller Central GST reports to GST portal compliant offline utility JSONs with multi-GSTIN support, validation, and reconciliation.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

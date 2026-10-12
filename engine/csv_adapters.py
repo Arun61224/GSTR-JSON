@@ -114,25 +114,29 @@ def detect_file_type(headers: List[str], filename: str = "") -> str:
     if "b2cs" in fname_lower or ("b2c" in fname_lower and "hsn" not in fname_lower):
         return "b2cs"
 
-    # 2. CDNR (Credit/Debit note)
+    # 2. Check B2B first if it has recipient GSTIN / Customer Bill To Gstid
+    has_inv = any("invoice" in h or "inum" in h for h in h_set)
+    has_recipient = any(
+        "customer bill to" in h or "bill to gst" in h or "gstid" in h or
+        "recipient" in h or "receiver" in h or "buyer" in h or "party" in h or "gstin" in h
+        for h in h_set
+    )
+    if (has_inv or any("bill to" in h for h in h_set)) and has_recipient:
+        return "b2b"
+
+    # 3. CDNR (Credit/Debit note)
     if any("note number" in h or "note no" in h or "note type" in h for h in h_set):
         return "cdnr"
 
-    # 3. Documents Issued
+    # 4. Documents Issued
     if any("nature of document" in h for h in h_set) or (
         any("sr. no. from" in h for h in h_set) and any("sr. no. to" in h for h in h_set)
     ):
         return "docs"
 
-    # 4. Supplies through E-commerce
+    # 5. Supplies through E-commerce
     if any("e-commerce operator" in h or "eco gstin" in h or "etin" in h for h in h_set):
         return "supeco"
-
-    # 5. B2B, SEZ, DE (invoice presence + recipient GSTIN or invoice number)
-    if any("invoice" in h or "inum" in h for h in h_set) and any(
-        "recipient" in h or "receiver" in h or "buyer" in h or "party" in h or "gstin" in h for h in h_set
-    ):
-        return "b2b"
 
     # 6. HSN summaries (pure HSN file has HSN + UQC/quantity and no invoices)
     has_inv = any("invoice" in h or "inum" in h for h in h_set)
@@ -210,16 +214,37 @@ class AmazonCSVAdapter:
 
         for idx, row in enumerate(rows, start=2):
             ctin = (
-                row.get("gstin/uin of recipient")
+                row.get("customer bill to gstid")
+                or row.get("customer bill to gstin")
+                or row.get("bill to gstid")
+                or row.get("bill to gstin")
+                or row.get("customer gstid")
+                or row.get("customer bill to gst")
+                or row.get("gstin/uin of recipient")
                 or row.get("gstin")
-                or row.get("recipient gstin", "")
+                or row.get("recipient gstin")
+                or row.get("buyer gstin")
+                or row.get("customer gstin", "")
             ).strip().upper()
             receiver_name = (row.get("receiver name") or row.get("party name", "")).strip()
             inum = (
                 row.get("invoice number")
                 or row.get("invoice no")
-                or row.get("inum", "")
+                or row.get("inum")
+                or row.get("bill no")
+                or row.get("order id", "")
             ).strip()
+            credit_note_no = (
+                row.get("credit note no")
+                or row.get("credit note no.")
+                or row.get("credit note number")
+                or row.get("credit note")
+                or row.get("note number")
+                or row.get("note no", "")
+            ).strip()
+
+            if not inum and credit_note_no:
+                inum = credit_note_no
             idt_raw = row.get("invoice date") or row.get("date", "")
             idt = parse_date_to_ddmmyyyy(idt_raw)
             val = parse_decimal_safe(

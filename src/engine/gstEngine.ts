@@ -341,7 +341,7 @@ export function detectFileType(headers: string[], filename: string = ''): 'b2b' 
   const fn = filename.toLowerCase();
 
   // 1. Filename-based detection
-  if (fn.includes('cdnr') || fn.includes('credit') || fn.includes('debit')) return 'cdnr';
+  if (fn.includes('cdnr') || fn.includes('credit_note') || fn.includes('debit_note')) return 'cdnr';
   if (fn.includes('docs') || fn.includes('document')) return 'docs';
   if (fn.includes('eco') || fn.includes('supeco') || fn.includes('ecommerce')) return 'supeco';
   if (fn.includes('hsn(b2b)') || fn.includes('hsn_b2b') || (fn.includes('hsn') && fn.includes('b2b'))) return 'hsn_b2b';
@@ -350,9 +350,6 @@ export function detectFileType(headers: string[], filename: string = ''): 'b2b' 
   if (fn.includes('b2cs') || (fn.includes('b2c') && !fn.includes('hsn'))) return 'b2cs';
 
   // 2. Header signature checks (specific to general)
-  if (norm.some(h => h.includes('note number') || h.includes('note no') || h.includes('credit note no') || h.includes('c/d note'))) {
-    return 'cdnr';
-  }
   if (norm.some(h => h.includes('nature of document') || h.includes('sr. no. from') || h.includes('total number'))) {
     return 'docs';
   }
@@ -361,9 +358,31 @@ export function detectFileType(headers: string[], filename: string = ''): 'b2b' 
   }
 
   const hasInvoice = norm.some(h => h.includes('invoice number') || h.includes('invoice no') || h.includes('inum') || h.includes('bill no') || h.includes('order id'));
-  const hasRecipientGstin = norm.some(h => h.includes('gstin/uin of recipient') || h.includes('recipient gstin') || h.includes('buyer gstin') || h.includes('customer gstin'));
-  if (hasInvoice && hasRecipientGstin) {
+  const hasRecipientGstin = norm.some(h =>
+    h.includes('customer bill to gstid') ||
+    h.includes('customer bill to gstin') ||
+    h.includes('customer bill to gst') ||
+    h.includes('bill to gstid') ||
+    h.includes('bill to gstin') ||
+    h.includes('customer gstid') ||
+    h.includes('gstid') ||
+    h.includes('gstin/uin of recipient') ||
+    h.includes('recipient gstin') ||
+    h.includes('buyer gstin') ||
+    h.includes('customer gstin') ||
+    h.includes('party gstin') ||
+    h.includes('receiver gstin') ||
+    h.includes('buyer_gstin')
+  );
+
+  // If file contains Customer Bill To Gstid or recipient GSTIN -> B2B file
+  if (hasRecipientGstin) {
     return 'b2b';
+  }
+
+  // Pure CDNR check (only when not a B2B sales file with invoice numbers)
+  if (norm.some(h => h.includes('note number') || h.includes('note type') || h.includes('c/d note')) && !hasInvoice) {
+    return 'cdnr';
   }
 
   // Pure HSN file detection: has HSN and UQC/Qty, but NO invoice numbers
@@ -380,6 +399,10 @@ export function detectFileType(headers: string[], filename: string = ''): 'b2b' 
 
   if (hasInvoice) {
     return 'b2b';
+  }
+
+  if (norm.some(h => h.includes('note number') || h.includes('note no') || h.includes('credit note no'))) {
+    return 'cdnr';
   }
 
   if (norm.some(h => h.includes('place of supply') || h.includes('pos')) && norm.some(h => h.includes('taxable') || h.includes('rate'))) {
@@ -683,11 +706,18 @@ export function processReportsLocally(
         }
 
         const inum = getFieldValue(normRow, ['invoice number', 'invoice no', 'inum', 'bill no', 'document number', 'doc no', 'order id']);
+        const creditNoteNo = getFieldValue(normRow, [
+          'credit note no', 'credit note no.', 'credit note number', 'credit note', 'note number', 'note no', 'cr note no', 'cdnr no', 'c/d note no', 'credit_note_no'
+        ]);
 
-        // Requirement 5: "blank invoice number wali rows ko hi ignore kr."
-        if (!inum || inum.trim() === '' || inum.trim() === '-' || inum.trim().toLowerCase() === 'n/a') {
+        // Requirement: Ignore row only if BOTH invoice number and credit note number are blank
+        const hasInum = Boolean(inum && inum.trim() !== '' && inum.trim() !== '-' && inum.trim().toLowerCase() !== 'n/a');
+        const hasCreditNoteNo = Boolean(creditNoteNo && creditNoteNo.trim() !== '' && creditNoteNo.trim() !== '-' && creditNoteNo.trim().toLowerCase() !== 'n/a');
+        if (!hasInum && !hasCreditNoteNo) {
           continue;
         }
+
+        const docRef = inum || creditNoteNo;
 
         // Determine which seller GSTIN this row belongs to
         const explicitSeller = getFieldValue(normRow, [
@@ -701,7 +731,7 @@ export function processReportsLocally(
         } else {
           // Check origin/warehouse state or invoice prefix FC code
           const originStateRaw = getFieldValue(normRow, ['ship from state', 'origin state', 'warehouse state', 'dispatch state', 'fc state']);
-          const originCode = extractStateCode(originStateRaw) || getStateFromInvoiceNumber(inum);
+          const originCode = extractStateCode(originStateRaw) || getStateFromInvoiceNumber(docRef);
           if (originCode) {
             const matched = userGstins.find(g => g.startsWith(originCode));
             if (matched) assignedGstin = matched;
@@ -728,7 +758,7 @@ export function processReportsLocally(
           }
         }
 
-        const idtRaw = getFieldValue(normRow, ['invoice date', 'date', 'inv date', 'doc date', 'shipment date']);
+        const idtRaw = getFieldValue(normRow, ['invoice date', 'date', 'inv date', 'doc date', 'shipment date', 'credit note date', 'note date']);
         const idt = parseDateToDDMMYYYY(idtRaw);
         if (idt && idt.length === 10) {
           const parts = idt.split('-');
@@ -750,60 +780,66 @@ export function processReportsLocally(
         if (invTypeRaw.includes('deemed') || invTypeRaw.includes('de')) invTyp = 'DE';
         else if (invTypeRaw.includes('sez')) invTyp = invTypeRaw.includes('with') ? 'SEWP' : 'SEWOP';
 
-        const ctin = getFieldValue(normRow, [
-          'gstin/uin of recipient', 'recipient gstin', 'buyer gstin', 'customer gstin', 'party gstin', 'buyer_gstin'
-        ]).toUpperCase();
-
-        invoiceNumbers.add(inum);
+        // USER SPECIFICATION: Recipient GSTIN is in column "Customer Bill To Gstid"
+        const rawCtin = getFieldValue(normRow, [
+          'customer bill to gstid',
+          'customer bill to gstin',
+          'bill to gstid',
+          'bill to gstin',
+          'customer gstid',
+          'customer bill to gst',
+          'gstin/uin of recipient',
+          'recipient gstin',
+          'buyer gstin',
+          'customer gstin',
+          'party gstin',
+          'receiver gstin',
+          'buyer_gstin',
+          'gstid'
+        ]);
+        const cleanCtin = rawCtin.replace(/[^0-9A-Z]/gi, '').toUpperCase();
+        const hasValidCtin = cleanCtin.length === 15 && (/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(cleanCtin) || /^[0-9]{2}[0-9A-Z]{13}$/.test(cleanCtin));
+        const isB2BRecipient = hasValidCtin || (cleanCtin.length >= 10 && cleanCtin !== 'URP' && cleanCtin !== 'NA' && cleanCtin !== 'NULL');
 
         // Requirement 6: Extract HSN from 'Hsn/sac' column
         const rawHsnCode = getFieldValue(normRow, [
           'hsn/sac', 'hsn / sac', 'hsn', 'sac', 'hsn code', 'commodity code', 'hsn_sac', 'hsn/sac code', 'item hsn'
         ]);
         const hsnCode = rawHsnCode.replace(/^hsn[:\s]*/i, '').trim();
-        const uqc = (getFieldValue(normRow, ['uqc', 'unit', 'uom']) || 'PCS').toUpperCase();
+        const uqc = (getFieldValue(normRow, ['uqc', 'unit', 'uom', 'unit of measure']) || 'PCS').toUpperCase();
         const qty = parseFloat(getFieldValue(normRow, ['total quantity', 'quantity', 'qty', 'units']) || '1') || 1;
 
         // Check if this row is a credit note or return
-        const isReturnRow = (txval < 0 || val < 0 || getFieldValue(normRow, ['document type', 'type', 'transaction type']).toLowerCase().includes('credit') || getFieldValue(normRow, ['transaction type']).toLowerCase().includes('refund'));
-        if (isReturnRow) {
-          creditNoteNumbers.add(inum);
-        }
+        const isCreditNoteRow = Boolean(
+          hasCreditNoteNo ||
+          getFieldValue(normRow, ['document type', 'transaction type', 'nature of document']).toLowerCase().includes('credit') ||
+          getFieldValue(normRow, ['document type', 'transaction type']).toLowerCase().includes('refund') ||
+          (txval < 0 && (hasCreditNoteNo || hasInum))
+        );
 
-        // If recipient GSTIN is present and valid -> B2B Invoice
-        if (ctin && gstinRegex.test(ctin)) {
-          const receiverName = getFieldValue(normRow, ['receiver name', 'party name', 'customer name', 'buyer name']);
+        if (isCreditNoteRow) {
+          const ntNum = creditNoteNo || inum;
+          creditNoteNumbers.add(ntNum);
 
-          if (!b2bInvoicesMap[inum]) {
-            b2bInvoicesMap[inum] = {
-              inum,
-              idt: idt || '01-09-2026',
-              val: roundCur(val || (txval + igst + cgst + sgst + cess)),
-              pos: pos || sellerState,
-              rchrg,
-              inv_typ: invTyp,
-              ctin,
-              receiverName,
-              itms: []
-            };
-          }
-
-          const itmNum = b2bInvoicesMap[inum].itms.length + 1;
-          b2bInvoicesMap[inum].itms.push({
-            num: itmNum,
-            itm_det: {
-              txval: roundCur(txval),
-              rt: rate,
-              iamt: igst,
-              camt: cgst,
-              samt: sgst,
-              csamt: roundCur(cess),
-            }
+          cdnrList.push({
+            ctin: cleanCtin || 'URP',
+            nt_num: ntNum,
+            nt_dt: idt || '01-09-2026',
+            val: roundCur(val || (txval + igst + cgst + sgst + cess)),
+            ntty: 'C',
+            pos: pos || sellerState,
+            rchrg,
+            rate,
+            txval: roundCur(txval),
+            iamt: igst,
+            camt: cgst,
+            samt: sgst,
+            cess: roundCur(cess)
           });
 
           if (hsnCode) {
             salesHsnLines.push({
-              category: 'B2B',
+              category: isB2BRecipient ? 'B2B' : 'B2C',
               hsn_sc: hsnCode,
               uqc,
               qty,
@@ -819,12 +855,12 @@ export function processReportsLocally(
           auditLog.push({
             source_file: f.filename,
             source_row: rowNum,
-            raw_reference: inum,
-            source_type: 'B2B_INVOICE',
+            raw_reference: ntNum,
+            source_type: 'B2B_CREDIT_NOTE',
             seller_gstin: cleanSellerGstin,
-            classification_decision: `B2B Line Rate ${rate}% (POS ${pos})`,
+            classification_decision: `B2B Credit Note ${ntNum} Rate ${rate}% (POS ${pos})`,
             status: 'INCLUDED',
-            reason: `Grouped into B2B invoice ${inum} for ${ctin}`,
+            reason: `Processed B2B Credit Note for ${cleanCtin || 'URP'}`,
             taxable_value: roundCur(txval),
             total_tax: roundCur(igst + cgst + sgst + cess),
             rate,
@@ -832,49 +868,115 @@ export function processReportsLocally(
             notes: ''
           });
         } else {
-          // If no registered recipient GSTIN -> Route to B2CS (B2C Small, Table 7)
-          b2csList.push({
-            sply_ty: isIntra ? 'INTRA' : 'INTER',
-            rt: rate,
-            typ: 'OE',
-            pos: pos || sellerState,
-            txval: roundCur(txval),
-            iamt: igst,
-            camt: cgst,
-            samt: sgst,
-            csamt: roundCur(cess)
-          });
+          // Standard Invoice Row
+          invoiceNumbers.add(inum);
 
-          if (hsnCode) {
-            salesHsnLines.push({
-              category: 'B2C',
-              hsn_sc: hsnCode,
-              uqc,
-              qty,
+          // If recipient GSTIN is present -> B2B Invoice
+          if (isB2BRecipient) {
+            const receiverName = getFieldValue(normRow, ['receiver name', 'party name', 'customer name', 'buyer name']);
+
+            if (!b2bInvoicesMap[inum]) {
+              b2bInvoicesMap[inum] = {
+                inum,
+                idt: idt || '01-09-2026',
+                val: roundCur(val || (txval + igst + cgst + sgst + cess)),
+                pos: pos || sellerState,
+                rchrg,
+                inv_typ: invTyp,
+                ctin: cleanCtin,
+                receiverName,
+                itms: []
+              };
+            }
+
+            const itmNum = b2bInvoicesMap[inum].itms.length + 1;
+            b2bInvoicesMap[inum].itms.push({
+              num: itmNum,
+              itm_det: {
+                txval: roundCur(txval),
+                rt: rate,
+                iamt: igst,
+                camt: cgst,
+                samt: sgst,
+                csamt: roundCur(cess),
+              }
+            });
+
+            if (hsnCode) {
+              salesHsnLines.push({
+                category: 'B2B',
+                hsn_sc: hsnCode,
+                uqc,
+                qty,
+                rt: rate,
+                txval: roundCur(txval),
+                iamt: igst,
+                camt: cgst,
+                samt: sgst,
+                csamt: roundCur(cess)
+              });
+            }
+
+            auditLog.push({
+              source_file: f.filename,
+              source_row: rowNum,
+              raw_reference: inum,
+              source_type: 'B2B_INVOICE',
+              seller_gstin: cleanSellerGstin,
+              classification_decision: `B2B Line Rate ${rate}% (POS ${pos})`,
+              status: 'INCLUDED',
+              reason: `Grouped into B2B invoice ${inum} for ${cleanCtin}`,
+              taxable_value: roundCur(txval),
+              total_tax: roundCur(igst + cgst + sgst + cess),
+              rate,
+              pos,
+              notes: ''
+            });
+          } else {
+            // If no registered recipient GSTIN -> Route to B2CS (B2C Small, Table 7)
+            b2csList.push({
+              sply_ty: isIntra ? 'INTRA' : 'INTER',
               rt: rate,
+              typ: 'OE',
+              pos: pos || sellerState,
               txval: roundCur(txval),
               iamt: igst,
               camt: cgst,
               samt: sgst,
               csamt: roundCur(cess)
             });
-          }
 
-          auditLog.push({
-            source_file: f.filename,
-            source_row: rowNum,
-            raw_reference: inum,
-            source_type: 'B2CS_LINE',
-            seller_gstin: cleanSellerGstin,
-            classification_decision: `B2CS Unregistered Rate ${rate}% (POS ${pos})`,
-            status: 'INCLUDED',
-            reason: `Aggregated to B2CS table (Consumer Order ${inum})`,
-            taxable_value: roundCur(txval),
-            total_tax: roundCur(igst + cgst + sgst + cess),
-            rate,
-            pos,
-            notes: ''
-          });
+            if (hsnCode) {
+              salesHsnLines.push({
+                category: 'B2C',
+                hsn_sc: hsnCode,
+                uqc,
+                qty,
+                rt: rate,
+                txval: roundCur(txval),
+                iamt: igst,
+                camt: cgst,
+                samt: sgst,
+                csamt: roundCur(cess)
+              });
+            }
+
+            auditLog.push({
+              source_file: f.filename,
+              source_row: rowNum,
+              raw_reference: inum,
+              source_type: 'B2CS_LINE',
+              seller_gstin: cleanSellerGstin,
+              classification_decision: `B2CS Unregistered Rate ${rate}% (POS ${pos})`,
+              status: 'INCLUDED',
+              reason: `Aggregated to B2CS table (Consumer Order ${inum})`,
+              taxable_value: roundCur(txval),
+              total_tax: roundCur(igst + cgst + sgst + cess),
+              rate,
+              pos,
+              notes: ''
+            });
+          }
         }
 
         totalRecordsProcessed++;
@@ -986,13 +1088,36 @@ export function processReportsLocally(
 
         creditNoteNumbers.add(noteNum);
 
-        const ctin = getFieldValue(normRow, ['gstin/uin of recipient', 'recipient gstin', 'buyer gstin', 'gstin']).toUpperCase();
+        const ctin = getFieldValue(normRow, [
+          'customer bill to gstid', 'customer bill to gstin', 'bill to gstid', 'bill to gstin',
+          'gstin/uin of recipient', 'recipient gstin', 'buyer gstin', 'customer gstin', 'gstin', 'party gstin'
+        ]).toUpperCase();
         const noteDt = parseDateToDDMMYYYY(getFieldValue(normRow, ['note date', 'date', 'credit note date']));
         const noteType = (getFieldValue(normRow, ['note type', 'type']) || 'C').toUpperCase();
         const pos = extractStateCode(getFieldValue(normRow, ['place of supply', 'pos', 'state'])) || sellerState;
         const rchrg = (getFieldValue(normRow, ['reverse charge', 'rchrg']) || 'N').toUpperCase();
 
         const { val: noteVal, txval, rate, igst, cgst, sgst, cess } = extractRowAmountsAndTaxes(normRow, sellerState, pos);
+
+        // Extract HSN from CDNR if available
+        const rawHsnCode = getFieldValue(normRow, ['hsn/sac', 'hsn / sac', 'hsn', 'sac', 'hsn code', 'item hsn']);
+        const hsnCode = rawHsnCode.replace(/^hsn[:\s]*/i, '').trim();
+        if (hsnCode) {
+          const uqc = (getFieldValue(normRow, ['uqc', 'unit', 'uom']) || 'PCS').toUpperCase();
+          const qty = parseFloat(getFieldValue(normRow, ['total quantity', 'quantity', 'qty']) || '1') || 1;
+          salesHsnLines.push({
+            category: (ctin && ctin !== 'URP') ? 'B2B' : 'B2C',
+            hsn_sc: hsnCode,
+            uqc,
+            qty,
+            rt: rate,
+            txval: roundCur(txval),
+            iamt: igst,
+            camt: cgst,
+            samt: sgst,
+            csamt: roundCur(cess)
+          });
+        }
 
         cdnrList.push({
           ctin: ctin || 'URP',
@@ -1335,8 +1460,8 @@ export function processReportsLocally(
     }))
   } : undefined;
 
-  // Format final HSN
-  if (hsnList.length === 0) {
+  // Format final HSN - ensure both B2C and B2B HSN entries are populated
+  if (hsnList.filter(i => i.category === 'B2C').length === 0) {
     for (const b2c of finalB2cs) {
       if (b2c.txval > 0) {
         hsnList.push({
@@ -1353,6 +1478,9 @@ export function processReportsLocally(
         });
       }
     }
+  }
+
+  if (hsnList.filter(i => i.category === 'B2B').length === 0) {
     for (const inv of Object.values(b2bInvoicesMap)) {
       for (const itm of inv.itms) {
         if (itm.itm_det.txval > 0) {

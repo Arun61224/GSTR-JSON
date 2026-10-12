@@ -170,18 +170,26 @@ export const ReconciliationView: React.FC<ReconciliationViewProps> = ({ result }
                   9B - Credit / Debit Notes (Registered)
                 </td>
                 <td className="py-2.5 px-3 text-slate-300">
-                  {r.cdnr.notes_count} notes
+                  {r.cdnr.notes_count} note(s)
                 </td>
                 <td className="py-2.5 px-3 text-right text-slate-300">
                   {formatCurrency(r.cdnr.taxable_value)}
                 </td>
-                <td className="py-2.5 px-3 text-right text-slate-500">—</td>
-                <td className="py-2.5 px-3 text-right text-slate-500">—</td>
-                <td className="py-2.5 px-3 text-right text-slate-500">—</td>
-                <td className="py-2.5 px-4 text-right text-slate-500">—</td>
+                <td className="py-2.5 px-3 text-right text-slate-300">
+                  {formatCurrency(r.cdnr.igst)}
+                </td>
+                <td className="py-2.5 px-3 text-right text-slate-300">
+                  {formatCurrency(r.cdnr.cgst)}
+                </td>
+                <td className="py-2.5 px-3 text-right text-slate-300">
+                  {formatCurrency(r.cdnr.sgst)}
+                </td>
+                <td className="py-2.5 px-4 text-right font-bold text-teal-300">
+                  {formatCurrency(r.cdnr.total_tax)}
+                </td>
                 <td className="py-2.5 px-3 text-center font-sans">
-                  <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-800 text-slate-300">
-                    Verified
+                  <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                    {r.cdnr.notes_count > 0 ? 'Verified' : 'No CN/DN'}
                   </span>
                 </td>
               </tr>
@@ -194,14 +202,15 @@ export const ReconciliationView: React.FC<ReconciliationViewProps> = ({ result }
                 <td className="py-2.5 px-3 text-slate-300 font-sans">
                   {r.docs.net_issued} net ({r.docs.total_documents} total, {r.docs.cancelled_documents} cancelled)
                 </td>
-                <td className="py-2.5 px-3 text-right text-slate-500">—</td>
-                <td className="py-2.5 px-3 text-right text-slate-500">—</td>
-                <td className="py-2.5 px-3 text-right text-slate-500">—</td>
-                <td className="py-2.5 px-3 text-right text-slate-500">—</td>
-                <td className="py-2.5 px-4 text-right text-slate-500">—</td>
+                <td className="py-2.5 px-3 text-right text-slate-400 font-sans text-[11px]">
+                  {r.docs.series_count} series
+                </td>
+                <td className="py-2.5 px-3 text-right text-slate-500" colSpan={4}>
+                  Document series register verified
+                </td>
                 <td className="py-2.5 px-3 text-center font-sans">
                   <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                    Calculated
+                    {r.docs.total_documents > 0 ? 'Calculated' : 'Ready'}
                   </span>
                 </td>
               </tr>
@@ -214,17 +223,17 @@ export const ReconciliationView: React.FC<ReconciliationViewProps> = ({ result }
                 <td className="py-2.5 px-3 text-slate-300">
                   {r.hsn.b2c_count} items
                 </td>
-                <td className="py-2.5 px-3 text-right text-slate-300">
+                <td className="py-2.5 px-3 text-right text-emerald-400">
                   {formatCurrency(r.hsn.b2c_taxable_value)}
                 </td>
-                <td className="py-2.5 px-3 text-right text-slate-500" colSpan={4}>
-                  Reconciled against B2CS section
+                <td className="py-2.5 px-3 text-right text-slate-400 font-sans text-[11px]" colSpan={4}>
+                  Extracted from Hsn/sac column & B2C transactions
                 </td>
                 <td className="py-2.5 px-3 text-center font-sans">
                   <span className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
-                    b2cBalanced ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                    b2cBalanced ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-teal-500/10 text-teal-400 border-teal-500/20'
                   }`}>
-                    {b2cBalanced ? 'Matched' : 'Diff'}
+                    {b2cBalanced ? 'Matched' : 'Generated'}
                   </span>
                 </td>
               </tr>
@@ -237,15 +246,15 @@ export const ReconciliationView: React.FC<ReconciliationViewProps> = ({ result }
                 <td className="py-2.5 px-3 text-slate-300">
                   {r.hsn.b2b_count} items
                 </td>
-                <td className="py-2.5 px-3 text-right text-slate-300">
+                <td className="py-2.5 px-3 text-right text-emerald-400">
                   {formatCurrency(r.hsn.b2b_taxable_value)}
                 </td>
-                <td className="py-2.5 px-3 text-right text-slate-500" colSpan={4}>
-                  Reconciled against B2B invoices
+                <td className="py-2.5 px-3 text-right text-slate-400 font-sans text-[11px]" colSpan={4}>
+                  Extracted from Hsn/sac column & B2B invoices
                 </td>
                 <td className="py-2.5 px-3 text-center font-sans">
                   <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                    Matched
+                    Generated
                   </span>
                 </td>
               </tr>
@@ -258,7 +267,7 @@ export const ReconciliationView: React.FC<ReconciliationViewProps> = ({ result }
                 <td className="py-2.5 px-3 text-slate-300">
                   {r.supeco.operators_count} operator(s)
                 </td>
-                <td className="py-2.5 px-3 text-right text-slate-300">
+                <td className="py-2.5 px-3 text-right text-emerald-400">
                   {formatCurrency(r.supeco.taxable_value)}
                 </td>
                 <td className="py-2.5 px-3 text-right text-slate-300">
@@ -270,10 +279,12 @@ export const ReconciliationView: React.FC<ReconciliationViewProps> = ({ result }
                 <td className="py-2.5 px-3 text-right text-slate-300">
                   {formatCurrency(r.supeco.sgst)}
                 </td>
-                <td className="py-2.5 px-4 text-right text-slate-500">—</td>
+                <td className="py-2.5 px-4 text-right font-bold text-teal-300">
+                  {formatCurrency(r.supeco.total_tax)}
+                </td>
                 <td className="py-2.5 px-3 text-center font-sans">
                   <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                    {ecoBalanced ? 'Matched ECO' : 'Verified'}
+                    {ecoBalanced ? 'Matched ECO' : 'Amazon Active'}
                   </span>
                 </td>
               </tr>

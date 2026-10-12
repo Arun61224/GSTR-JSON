@@ -128,25 +128,32 @@ def detect_file_type(headers: List[str], filename: str = "") -> str:
     if any("e-commerce operator" in h or "eco gstin" in h or "etin" in h for h in h_set):
         return "supeco"
 
-    # 5. HSN summaries
-    if any("hsn" in h or "sac" in h for h in h_set):
+    # 5. B2B, SEZ, DE (invoice presence + recipient GSTIN or invoice number)
+    if any("invoice" in h or "inum" in h for h in h_set) and any(
+        "recipient" in h or "receiver" in h or "buyer" in h or "party" in h or "gstin" in h for h in h_set
+    ):
+        return "b2b"
+
+    # 6. HSN summaries (pure HSN file has HSN + UQC/quantity and no invoices)
+    has_inv = any("invoice" in h or "inum" in h for h in h_set)
+    if any("hsn" in h or "sac" in h for h in h_set) and not has_inv:
         if "b2c" in fname_lower or any("b2c" in h for h in h_set):
             return "hsn_b2c"
         if "b2b" in fname_lower or any("b2b" in h for h in h_set):
             return "hsn_b2b"
         return "hsn_b2c" if "b2c" in fname_lower else "hsn_b2b"
 
-    # 6. B2B, SEZ, DE
-    if any("invoice" in h or "inum" in h for h in h_set) and any(
-        "recipient" in h or "receiver" in h or "buyer" in h or "party" in h or "gstin" in h for h in h_set
-    ):
-        return "b2b"
-
     # 7. B2CS
     if (
         any("type" in h or "place of supply" in h or "pos" in h or "state" in h for h in h_set)
     ) and any("taxable" in h or "rate" in h or "amount" in h for h in h_set):
         return "b2cs"
+
+    if any("invoice" in h or "inum" in h for h in h_set):
+        return "b2b"
+
+    if any("hsn" in h or "sac" in h for h in h_set):
+        return "hsn_b2c"
 
     return "unknown"
 
@@ -215,7 +222,9 @@ class AmazonCSVAdapter:
             ).strip()
             idt_raw = row.get("invoice date") or row.get("date", "")
             idt = parse_date_to_ddmmyyyy(idt_raw)
-            val = parse_decimal_safe(row.get("invoice value") or row.get("total value") or row.get("val", 0))
+            val = parse_decimal_safe(
+                row.get("invoice amount") or row.get("invoice value") or row.get("total value") or row.get("val") or 0
+            )
             pos_raw = row.get("place of supply") or row.get("pos", "")
             pos = extract_state_code(pos_raw)
             rchrg = (row.get("reverse charge") or row.get("rchrg", "N")).strip().upper()
@@ -230,9 +239,22 @@ class AmazonCSVAdapter:
                 inv_type = InvoiceType.SEZ_WITH_PAY if "with" in inv_type_raw.lower() else InvoiceType.SEZ_WITHOUT_PAY
 
             eco_gstin = (row.get("e-commerce gstin") or "").strip().upper() or None
-            rate = parse_decimal_safe(row.get("rate", 0))
-            txval = parse_decimal_safe(row.get("taxable value") or row.get("txval", 0))
+            txval = parse_decimal_safe(
+                row.get("tax exclusive gross") or row.get("taxable value") or row.get("txval") or 0
+            )
             cess = parse_decimal_safe(row.get("cess amount") or row.get("cess", 0))
+
+            raw_cgst = parse_decimal_safe(row.get("cgst tax") or row.get("cgst amount") or row.get("cgst") or 0)
+            raw_sgst = parse_decimal_safe(row.get("sgst tax") or row.get("sgst amount") or row.get("sgst") or 0)
+            raw_utgst = parse_decimal_safe(row.get("utgst tax") or row.get("utgst amount") or row.get("utgst") or 0)
+            raw_igst = parse_decimal_safe(row.get("igst tax") or row.get("igst amount") or row.get("igst") or 0)
+
+            rate = parse_decimal_safe(row.get("rate") or row.get("gst rate") or row.get("tax rate") or 0)
+            if rate == Decimal("0") and txval > Decimal("0"):
+                if raw_igst > Decimal("0"):
+                    rate = round_cur((raw_igst / txval) * Decimal("100.0"))
+                elif (raw_cgst + raw_sgst + raw_utgst) > Decimal("0"):
+                    rate = round_cur(((raw_cgst + (raw_sgst or raw_utgst)) / txval) * Decimal("100.0"))
 
             if not inum:
                 # Silently ignore rows with blank invoice numbers
@@ -251,17 +273,22 @@ class AmazonCSVAdapter:
                 ))
 
             # Determine taxes
-            sply_type = determine_supply_type(seller_gstin, pos)
-            half_rate = rate / Decimal("2.0")
-            if sply_type == determine_supply_type(seller_gstin, seller_gstin[:2] if len(seller_gstin) >= 2 else "99"):
-                # Intra-state
-                cgst = round_cur((txval * half_rate) / Decimal("100.0"))
-                sgst = round_cur((txval * half_rate) / Decimal("100.0"))
-                igst = Decimal("0.00")
+            if raw_igst > Decimal("0") or raw_cgst > Decimal("0") or raw_sgst > Decimal("0") or raw_utgst > Decimal("0"):
+                igst = round_cur(raw_igst)
+                cgst = round_cur(raw_cgst)
+                sgst = round_cur(raw_sgst or raw_utgst)
             else:
-                igst = round_cur((txval * rate) / Decimal("100.0"))
-                cgst = Decimal("0.00")
-                sgst = Decimal("0.00")
+                sply_type = determine_supply_type(seller_gstin, pos)
+                half_rate = rate / Decimal("2.0")
+                if sply_type == determine_supply_type(seller_gstin, seller_gstin[:2] if len(seller_gstin) >= 2 else "99"):
+                    # Intra-state
+                    cgst = round_cur((txval * half_rate) / Decimal("100.0"))
+                    sgst = round_cur((txval * half_rate) / Decimal("100.0"))
+                    igst = Decimal("0.00")
+                else:
+                    igst = round_cur((txval * rate) / Decimal("100.0"))
+                    cgst = Decimal("0.00")
+                    sgst = Decimal("0.00")
 
             if inum not in invoices_map:
                 inv = NormalizedB2BInvoice(

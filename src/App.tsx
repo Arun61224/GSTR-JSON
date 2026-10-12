@@ -138,7 +138,25 @@ export default function App() {
       const filteredPrev = prev.filter(
         (p) => !existingTypes.has(p.detectedType)
       );
-      return [...filteredPrev, ...newFiles];
+      const combined = [...filteredPrev, ...newFiles];
+
+      // Auto-switch to the GSTIN that contains data
+      setTimeout(() => {
+        let bestG = '';
+        let maxCount = 0;
+        for (const g of gstinList) {
+          const res = processReportsLocally(combined, g, filingPeriod);
+          if (res.total_records_processed > maxCount) {
+            maxCount = res.total_records_processed;
+            bestG = g;
+          }
+        }
+        if (bestG) {
+          setSelectedGstin(bestG);
+        }
+      }, 50);
+
+      return combined;
     });
   };
 
@@ -193,6 +211,7 @@ export default function App() {
           onRemoveGstin={handleRemoveGstin}
           filingPeriod={filingPeriod}
           onChangeFilingPeriod={setFilingPeriod}
+          gstinRecordCounts={currentResult.gstin_record_counts}
         />
 
         {/* GSTIN Switcher Prompt if another GSTIN has records */}

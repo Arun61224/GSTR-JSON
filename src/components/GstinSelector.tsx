@@ -10,6 +10,7 @@ interface GstinSelectorProps {
   onRemoveGstin: (gstin: string) => void;
   filingPeriod: string;
   onChangeFilingPeriod: (fp: string) => void;
+  gstinRecordCounts?: Record<string, number>;
 }
 
 export const GstinSelector: React.FC<GstinSelectorProps> = ({
@@ -20,6 +21,7 @@ export const GstinSelector: React.FC<GstinSelectorProps> = ({
   onRemoveGstin,
   filingPeriod,
   onChangeFilingPeriod,
+  gstinRecordCounts = {},
 }) => {
   const [newGstin, setNewGstin] = useState('');
   const [inputError, setInputError] = useState('');
@@ -79,6 +81,7 @@ export const GstinSelector: React.FC<GstinSelectorProps> = ({
               const stateCode = g.slice(0, 2);
               const stateName = STATE_CODE_MAP[stateCode] || 'Unknown';
               const isSelected = selectedGstin === g;
+              const count = gstinRecordCounts[g] || 0;
 
               return (
                 <div
@@ -91,9 +94,16 @@ export const GstinSelector: React.FC<GstinSelectorProps> = ({
                   }`}
                 >
                   <div className="flex flex-col text-left">
-                    <span className="font-semibold">{g}</span>
+                    <div className="flex items-center space-x-1.5">
+                      <span className="font-semibold">{g}</span>
+                      {count > 0 && (
+                        <span className="px-1.5 py-0.2 rounded text-[10px] font-sans font-bold bg-teal-500/20 text-teal-300 border border-teal-500/30">
+                          {count}
+                        </span>
+                      )}
+                    </div>
                     <span className="text-[10px] text-slate-400 font-sans">
-                      {stateName}
+                      {stateName} {count > 0 ? `(${count} records)` : ''}
                     </span>
                   </div>
 
